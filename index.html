@@ -263,7 +263,7 @@ body{
 // MEXC API — прямые запросы из браузера (CORS разрешён у MEXC)
 // ================================================================
 
-const MEXC_API = 'https://contract.mexc.com/api/v1/contract';
+const MEXC_API = '/api/mexc';
 
 async function fetchSymbols() {
     const resp = await fetch(`${MEXC_API}/detail`);
