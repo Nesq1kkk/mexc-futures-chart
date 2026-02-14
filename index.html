@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEXC Futures Chart</title>
+<meta name="description" content="Live comparison chart for MEXC cryptocurrency futures pairs">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+
+<script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+
+body{
+    font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+    background:#0a0a0f;
+    color:#ccc;
+    height:100vh;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+}
+
+/* ===== TOOLBAR ===== */
+.toolbar{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px 16px;
+    background:#12121a;
+    border-bottom:1px solid #2a2a3a;
+    flex-wrap:wrap;
+    z-index:100;
+}
+.toolbar .logo{
+    font-size:17px;
+    font-weight:700;
+    color:#00bcd4;
+    margin-right:10px;
+    white-space:nowrap;
+    user-select:none;
+}
+.field{display:flex;align-items:center;gap:5px}
+.field label{font-size:12px;color:#777;white-space:nowrap}
+.field input,.field select{
+    background:#1a1a2e;
+    border:1px solid #333;
+    color:#ddd;
+    padding:6px 8px;
+    border-radius:5px;
+    font-size:13px;
+    font-family:Consolas,'Courier New',monospace;
+    outline:none;
+    transition:border-color .2s;
+}
+.field input:focus,.field select:focus{border-color:#00bcd4}
+.symbol-input{width:150px}
+
+.btn{
+    background:linear-gradient(135deg,#00bcd4,#0097a7);
+    color:#fff;
+    border:none;
+    padding:7px 16px;
+    border-radius:5px;
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+    transition:opacity .2s;
+    white-space:nowrap;
+}
+.btn:hover{opacity:.85}
+.btn:disabled{opacity:.4;cursor:default}
+.btn-secondary{background:linear-gradient(135deg,#333,#444)}
+.btn-secondary:hover{opacity:.85}
+
+.mode-toggle{
+    background:#1a1a2e;
+    border:1px solid #333;
+    color:#aaa;
+    padding:5px 10px;
+    border-radius:5px;
+    font-size:11px;
+    cursor:pointer;
+    transition:all .2s;
+}
+.mode-toggle:hover{border-color:#00bcd4;color:#ddd}
+.mode-toggle.active{border-color:#00bcd4;color:#00bcd4;background:#0a2a2e}
+
+.mode-info{font-size:10px;color:#555;margin-left:4px;max-width:140px;line-height:1.3}
+
+/* ===== CHART ===== */
+.chart-wrap{flex:1;position:relative;background:#0a0a0f}
+#chart{width:100%;height:100%}
+
+/* ===== LEGEND ===== */
+.legend{
+    position:absolute;
+    top:10px;left:10px;
+    z-index:50;
+    display:none;
+    gap:16px;
+    padding:7px 14px;
+    background:rgba(18,18,26,.9);
+    border-radius:7px;
+    border:1px solid #2a2a3a;
+    font-size:12px;
+    font-family:Consolas,monospace;
+    backdrop-filter:blur(8px);
+}
+.legend-item{display:flex;align-items:center;gap:6px}
+.legend-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+
+/* ===== STATUS BAR ===== */
+.status-bar{
+    padding:5px 16px;
+    background:#12121a;
+    border-top:1px solid #2a2a3a;
+    font-size:11px;
+    color:#555;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+.status-bar .prices{display:flex;gap:16px;font-family:Consolas,monospace;font-size:12px}
+.price-s1{color:#2196F3}
+.price-s2{color:#FF5722}
+
+/* ===== AUTOCOMPLETE ===== */
+.ac-wrap{position:relative}
+.ac-list{
+    position:absolute;
+    top:100%;left:0;width:100%;
+    max-height:280px;
+    overflow-y:auto;
+    background:#1a1a2e;
+    border:1px solid #333;
+    border-top:none;
+    border-radius:0 0 6px 6px;
+    z-index:999;
+    display:none;
+}
+.ac-list.show{display:block}
+.ac-item{
+    padding:7px 10px;
+    cursor:pointer;
+    font-family:Consolas,monospace;
+    font-size:12px;
+    border-bottom:1px solid #1f1f33;
+    transition:background .1s;
+}
+.ac-item:hover,.ac-item.active{background:#00bcd4;color:#000}
+.ac-item mark{background:none;color:#ffeb3b;font-weight:700}
+.ac-item:hover mark,.ac-item.active mark{color:#000}
+
+/* ===== SPINNER ===== */
+.spinner{
+    display:inline-block;width:12px;height:12px;
+    border:2px solid #333;border-top:2px solid #00bcd4;
+    border-radius:50%;
+    animation:spin .7s linear infinite;
+    vertical-align:middle;margin-right:4px;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:#1a1a2e}
+::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
+
+/* ===== RESPONSIVE ===== */
+@media(max-width:900px){
+    .toolbar{gap:6px;padding:8px 10px}
+    .symbol-input{width:120px}
+    .mode-info{display:none}
+    .logo{font-size:14px!important}
+}
+@media(max-width:600px){
+    .symbol-input{width:100px}
+    .field label{font-size:10px}
+    .btn{padding:5px 10px;font-size:11px}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ TOOLBAR ═══════════════ -->
+<div class="toolbar">
+    <div class="logo">📊 MEXC Futures</div>
+
+    <div class="field">
+        <label>Symbol 1:</label>
+        <div class="ac-wrap">
+            <input type="text" id="sym1" class="symbol-input" placeholder="BTC_USDT" autocomplete="off">
+            <div class="ac-list" id="acl1"></div>
+        </div>
+    </div>
+
+    <div class="field">
+        <label>Symbol 2:</label>
+        <div class="ac-wrap">
+            <input type="text" id="sym2" class="symbol-input" placeholder="ETH_USDT" autocomplete="off">
+            <div class="ac-list" id="acl2"></div>
+        </div>
+    </div>
+
+    <div class="field">
+        <label>Interval:</label>
+        <select id="interval">
+            <option value="Min1">1m</option>
+            <option value="Min5">5m</option>
+            <option value="Min15" selected>15m</option>
+            <option value="Min30">30m</option>
+            <option value="Min60">1h</option>
+            <option value="Hour4">4h</option>
+            <option value="Hour8">8h</option>
+            <option value="Day1">1D</option>
+            <option value="Week1">1W</option>
+        </select>
+    </div>
+
+    <div class="field">
+        <label>Candles:</label>
+        <input type="number" id="limit" value="200" min="10" max="2000" style="width:60px">
+    </div>
+
+    <button class="btn" id="plotBtn" onclick="plotCharts()">📈 Plot</button>
+    <button class="btn btn-secondary" onclick="loadSymbols()">🔄</button>
+
+    <div class="field">
+        <button class="mode-toggle active" id="normBtn" onclick="toggleMode()">% Mode</button>
+        <span class="mode-info" id="modeInfo">Normalized — lines don't jump</span>
+    </div>
+</div>
+
+<!-- ═══════════════ CHART ═══════════════ -->
+<div class="chart-wrap">
+    <div class="legend" id="legend">
+        <div class="legend-item" id="leg1">
+            <div class="legend-dot" style="background:#2196F3"></div>
+            <span id="legText1">—</span>
+        </div>
+        <div class="legend-item" id="leg2">
+            <div class="legend-dot" style="background:#FF5722"></div>
+            <span id="legText2">—</span>
+        </div>
+    </div>
+    <div id="chart"></div>
+</div>
+
+<!-- ═══════════════ STATUS BAR ═══════════════ -->
+<div class="status-bar">
+    <div id="status">Loading symbols...</div>
+    <div class="prices">
+        <span class="price-s1" id="priceTag1"></span>
+        <span class="price-s2" id="priceTag2"></span>
+    </div>
+</div>
+
+
+<script>
+// ================================================================
+// MEXC API — прямые запросы из браузера (CORS разрешён у MEXC)
+// ================================================================
+
+const MEXC_API = 'https://contract.mexc.com/api/v1/contract';
+
+async function fetchSymbols() {
+    const resp = await fetch(`${MEXC_API}/detail`);
+    const json = await resp.json();
+    if (json.success && json.data) {
+        return json.data.map(item => item.symbol).sort();
+    }
+    return [];
+}
+
+async function fetchKline(symbol, interval, limit) {
+    const url = `${MEXC_API}/kline/${symbol}?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+    const resp = await fetch(url);
+    const json = await resp.json();
+    if (json.success && json.data) {
+        const kd = json.data;
+        const times = kd.time || [];
+        const opens = kd.open || [];
+        const highs = kd.high || [];
+        const lows = kd.low || [];
+        const closes = kd.close || [];
+        const vols = kd.vol || [];
+        const result = [];
+        for (let i = 0; i < times.length; i++) {
+            result.push({
+                time: times[i],
+                open: parseFloat(opens[i]),
+                high: parseFloat(highs[i]),
+                low: parseFloat(lows[i]),
+                close: parseFloat(closes[i]),
+                vol: i < vols.length ? parseFloat(vols[i]) : 0
+            });
+        }
+        return result;
+    }
+    return null;
+}
+
+// ================================================================
+// GLOBAL STATE
+// ================================================================
+
+let allSymbols = [];
+let chart = null;
+let series1 = null;
+let series2 = null;
+let raw1 = null;
+let raw2 = null;
+let name1 = '';
+let name2 = '';
+let useNormalized = true;
+
+// ================================================================
+// INIT
+// ================================================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    createChart();
+    loadSymbols();
+    setupAutocomplete('sym1', 'acl1');
+    setupAutocomplete('sym2', 'acl2');
+
+    document.getElementById('sym1').addEventListener('keydown', e => {
+        if (e.key === 'Enter') plotCharts();
+    });
+    document.getElementById('sym2').addEventListener('keydown', e => {
+        if (e.key === 'Enter') plotCharts();
+    });
+});
+
+window.addEventListener('resize', () => {
+    if (chart) {
+        const el = document.getElementById('chart');
+        chart.resize(el.clientWidth, el.clientHeight);
+    }
+});
+
+// ================================================================
+// CHART CREATION
+// ================================================================
+
+function createChart() {
+    if (chart) { chart.remove(); chart = null; }
+    series1 = null;
+    series2 = null;
+
+    const el = document.getElementById('chart');
+
+    chart = LightweightCharts.createChart(el, {
+        width: el.clientWidth,
+        height: el.clientHeight,
+        layout: {
+            background: { type: 'solid', color: '#0a0a0f' },
+            textColor: '#888',
+            fontSize: 12,
+        },
+        grid: {
+            vertLines: { color: '#1a1a2e' },
+            horzLines: { color: '#1a1a2e' },
+        },
+        crosshair: {
+            mode: LightweightCharts.CrosshairMode.Normal,
+            vertLine: { color: '#00bcd422', labelBackgroundColor: '#00bcd4' },
+            horzLine: { color: '#00bcd422', labelBackgroundColor: '#00bcd4' },
+        },
+        rightPriceScale: {
+            visible: true,
+            borderColor: '#2a2a3a',
+            scaleMargins: { top: 0.08, bottom: 0.08 },
+            autoScale: true,
+        },
+        leftPriceScale: {
+            visible: !useNormalized,
+            borderColor: '#2a2a3a',
+            scaleMargins: { top: 0.08, bottom: 0.08 },
+            autoScale: true,
+        },
+        timeScale: {
+            borderColor: '#2a2a3a',
+            timeVisible: true,
+            secondsVisible: false,
+        },
+        handleScroll: {
+            mouseWheel: true,
+            pressedMouseMove: true,
+            horzTouchDrag: true,
+            vertTouchDrag: false,
+        },
+        handleScale: {
+            axisPressedMouseMove: false,
+            mouseWheel: true,
+            pinch: true,
+        },
+    });
+
+    // Crosshair tooltip
+    chart.subscribeCrosshairMove(param => {
+        if (!param || !param.time) return;
+
+        if (series1 && param.seriesData.has(series1)) {
+            const v = param.seriesData.get(series1);
+            if (v && v.value !== undefined) {
+                const txt = useNormalized
+                    ? `${name1}: ${v.value.toFixed(2)}%`
+                    : `${name1}: ${v.value}`;
+                document.getElementById('legText1').textContent = txt;
+                document.getElementById('priceTag1').textContent = txt;
+            }
+        }
+        if (series2 && param.seriesData.has(series2)) {
+            const v = param.seriesData.get(series2);
+            if (v && v.value !== undefined) {
+                const txt = useNormalized
+                    ? `${name2}: ${v.value.toFixed(2)}%`
+                    : `${name2}: ${v.value}`;
+                document.getElementById('legText2').textContent = txt;
+                document.getElementById('priceTag2').textContent = txt;
+            }
+        }
+    });
+}
+
+// ================================================================
+// NORMALIZE DATA TO %
+// ================================================================
+
+function toPercent(data) {
+    if (!data || data.length === 0) return [];
+    const base = data[0].close || 1;
+    return data.map(d => ({
+        time: d.time,
+        value: ((d.close - base) / base) * 100
+    }));
+}
+
+// ================================================================
+// DRAW / REDRAW
+// ================================================================
+
+function redraw() {
+    createChart();
+
+    if (useNormalized) {
+        // ОБЕ серии на ОДНОЙ правой оси — синхронное масштабирование
+        if (raw1 && raw1.length) {
+            series1 = chart.addLineSeries({
+                color: '#2196F3',
+                lineWidth: 2,
+                priceScaleId: 'right',
+                title: name1,
+                lastValueVisible: true,
+                priceLineVisible: false,
+                priceFormat: { type: 'custom', formatter: v => v.toFixed(2) + '%' },
+            });
+            series1.setData(toPercent(raw1));
+        }
+        if (raw2 && raw2.length) {
+            series2 = chart.addLineSeries({
+                color: '#FF5722',
+                lineWidth: 2,
+                priceScaleId: 'right',  // ТА ЖЕ ось
+                title: name2,
+                lastValueVisible: true,
+                priceLineVisible: false,
+                priceFormat: { type: 'custom', formatter: v => v.toFixed(2) + '%' },
+            });
+            series2.setData(toPercent(raw2));
+        }
+    } else {
+        // Абсолютные цены — разные оси
+        if (raw1 && raw1.length) {
+            series1 = chart.addLineSeries({
+                color: '#2196F3',
+                lineWidth: 2,
+                priceScaleId: 'right',
+                title: name1,
+                lastValueVisible: true,
+                priceLineVisible: true,
+            });
+            series1.setData(raw1.map(d => ({ time: d.time, value: d.close })));
+        }
+        if (raw2 && raw2.length) {
+            series2 = chart.addLineSeries({
+                color: '#FF5722',
+                lineWidth: 2,
+                priceScaleId: 'left',
+                title: name2,
+                lastValueVisible: true,
+                priceLineVisible: true,
+            });
+            series2.setData(raw2.map(d => ({ time: d.time, value: d.close })));
+        }
+    }
+
+    chart.timeScale().fitContent();
+    updateLegend();
+}
+
+function updateLegend() {
+    const leg = document.getElementById('legend');
+    const l1 = document.getElementById('leg1');
+    const l2 = document.getElementById('leg2');
+
+    leg.style.display = (raw1 || raw2) ? 'flex' : 'none';
+
+    if (raw1 && raw1.length) {
+        l1.style.display = 'flex';
+        const lastClose = raw1[raw1.length - 1].close;
+        if (useNormalized) {
+            const pct = toPercent(raw1);
+            const lastPct = pct[pct.length - 1].value;
+            document.getElementById('legText1').textContent = `${name1}: ${lastPct.toFixed(2)}%`;
+            document.getElementById('priceTag1').textContent = `${name1}: ${lastPct.toFixed(2)}% (${lastClose})`;
+        } else {
+            document.getElementById('legText1').textContent = `${name1}: ${lastClose}`;
+            document.getElementById('priceTag1').textContent = `${name1}: ${lastClose}`;
+        }
+    } else {
+        l1.style.display = 'none';
+        document.getElementById('priceTag1').textContent = '';
+    }
+
+    if (raw2 && raw2.length) {
+        l2.style.display = 'flex';
+        const lastClose = raw2[raw2.length - 1].close;
+        if (useNormalized) {
+            const pct = toPercent(raw2);
+            const lastPct = pct[pct.length - 1].value;
+            document.getElementById('legText2').textContent = `${name2}: ${lastPct.toFixed(2)}%`;
+            document.getElementById('priceTag2').textContent = `${name2}: ${lastPct.toFixed(2)}% (${lastClose})`;
+        } else {
+            document.getElementById('legText2').textContent = `${name2}: ${lastClose}`;
+            document.getElementById('priceTag2').textContent = `${name2}: ${lastClose}`;
+        }
+    } else {
+        l2.style.display = 'none';
+        document.getElementById('priceTag2').textContent = '';
+    }
+}
+
+// ================================================================
+// TOGGLE MODE
+// ================================================================
+
+function toggleMode() {
+    useNormalized = !useNormalized;
+    const btn = document.getElementById('normBtn');
+    const info = document.getElementById('modeInfo');
+
+    if (useNormalized) {
+        btn.classList.add('active');
+        btn.textContent = '% Mode';
+        info.textContent = 'Normalized — lines don\'t jump';
+    } else {
+        btn.classList.remove('active');
+        btn.textContent = 'Abs Mode';
+        info.textContent = 'Absolute prices, separate axes';
+    }
+
+    if (raw1 || raw2) redraw();
+}
+
+// ================================================================
+// LOAD SYMBOLS
+// ================================================================
+
+async function loadSymbols() {
+    setStatus('<span class="spinner"></span> Loading futures symbols...');
+    try {
+        allSymbols = await fetchSymbols();
+        if (allSymbols.length) {
+            setStatus(`✅ ${allSymbols.length} futures pairs loaded`);
+            const s1 = document.getElementById('sym1');
+            const s2 = document.getElementById('sym2');
+            if (!s1.value) s1.value = allSymbols.includes('BTC_USDT') ? 'BTC_USDT' : allSymbols[0];
+            if (!s2.value) s2.value = allSymbols.includes('ETH_USDT') ? 'ETH_USDT' : (allSymbols[1] || '');
+        } else {
+            setStatus('❌ No symbols loaded');
+        }
+    } catch (e) {
+        setStatus('❌ Failed: ' + e.message);
+    }
+}
+
+// ================================================================
+// PLOT
+// ================================================================
+
+async function plotCharts() {
+    const s1 = document.getElementById('sym1').value.trim();
+    const s2 = document.getElementById('sym2').value.trim();
+    const iv = document.getElementById('interval').value;
+    let lm = parseInt(document.getElementById('limit').value) || 200;
+    lm = Math.max(10, Math.min(2000, lm));
+
+    if (!s1 && !s2) { setStatus('⚠️ Enter at least one symbol'); return; }
+
+    const btn = document.getElementById('plotBtn');
+    btn.disabled = true;
+    setStatus('<span class="spinner"></span> Loading chart data...');
+
+    raw1 = null; raw2 = null;
+    name1 = s1; name2 = s2;
+
+    const tasks = [];
+    if (s1) tasks.push(fetchKline(s1, iv, lm).then(d => { raw1 = d; }));
+    if (s2) tasks.push(fetchKline(s2, iv, lm).then(d => { raw2 = d; }));
+
+    try {
+        await Promise.all(tasks);
+    } catch (e) {
+        setStatus('❌ Network error: ' + e.message);
+        btn.disabled = false;
+        return;
+    }
+
+    redraw();
+
+    // Status
+    const parts = [];
+    if (raw1) parts.push(`${s1}: ${raw1.length} candles`);
+    if (raw2) parts.push(`${s2}: ${raw2.length} candles`);
+    const errs = [];
+    if (s1 && !raw1) errs.push(`❌ ${s1}`);
+    if (s2 && !raw2) errs.push(`❌ ${s2}`);
+    setStatus(
+        (parts.length ? '✅ ' + parts.join(' | ') : '') +
+        (errs.length ? ' | ' + errs.join(' | ') : '')
+    );
+
+    btn.disabled = false;
+}
+
+// ================================================================
+// AUTOCOMPLETE
+// ================================================================
+
+function setupAutocomplete(inputId, listId) {
+    const inp = document.getElementById(inputId);
+    const lst = document.getElementById(listId);
+    let idx = -1;
+
+    inp.addEventListener('focus', () => showAC(inp, lst));
+    inp.addEventListener('input', () => { idx = -1; showAC(inp, lst); });
+
+    inp.addEventListener('keydown', e => {
+        const items = lst.querySelectorAll('.ac-item');
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            idx = Math.min(idx + 1, items.length - 1);
+            hlAC(items, idx);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            idx = Math.max(idx - 1, 0);
+            hlAC(items, idx);
+        } else if (e.key === 'Enter' && idx >= 0 && items[idx]) {
+            inp.value = items[idx].dataset.sym;
+            lst.classList.remove('show');
+            idx = -1;
+        } else if (e.key === 'Escape') {
+            lst.classList.remove('show');
+        }
+    });
+
+    document.addEventListener('click', e => {
+        if (!inp.contains(e.target) && !lst.contains(e.target)) {
+            lst.classList.remove('show');
+        }
+    });
+}
+
+function showAC(inp, lst) {
+    const q = inp.value.toUpperCase().trim();
+    const filtered = q ? allSymbols.filter(s => s.includes(q)) : allSymbols;
+    if (!filtered.length) { lst.classList.remove('show'); return; }
+
+    lst.innerHTML = filtered.slice(0, 60).map(s => {
+        let html = s;
+        if (q) {
+            const i = s.indexOf(q);
+            if (i >= 0) {
+                html = s.substring(0, i) +
+                    '<mark>' + s.substring(i, i + q.length) + '</mark>' +
+                    s.substring(i + q.length);
+            }
+        }
+        return `<div class="ac-item" data-sym="${s}"
+                     onclick="document.getElementById('${inp.id}').value='${s}';
+                              document.getElementById('${lst.id}').classList.remove('show')">
+                    ${html}
+                </div>`;
+    }).join('');
+
+    lst.classList.add('show');
+}
+
+function hlAC(items, i) {
+    items.forEach(x => x.classList.remove('active'));
+    if (items[i]) {
+        items[i].classList.add('active');
+        items[i].scrollIntoView({ block: 'nearest' });
+    }
+}
+
+// ================================================================
+// UTIL
+// ================================================================
+
+function setStatus(html) {
+    document.getElementById('status').innerHTML = html;
+}
+</script>
+</body>
+</html>
